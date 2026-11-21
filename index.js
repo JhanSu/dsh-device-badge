@@ -1,8 +1,8 @@
 /**
- * dsh-battery-badge — host half.
+ * dsh-device-badge — host half.
  *
  * Serves one read-only loopback route the sidebar badge polls:
- *   GET /api/battery-badge/status
+ *   GET /api/device-badge/status
  *
  * Detects what kind of machine DSH is running on and returns enough for the
  * client to pick the right presentation:
@@ -27,9 +27,9 @@ import { readFile } from 'node:fs/promises'
 
 const execFileAsync = promisify(execFile)
 
-export const name = 'battery-badge'
+export const name = 'device-badge'
 
-const STATUS_ROUTE = '/api/battery-badge/status'
+const STATUS_ROUTE = '/api/device-badge/status'
 const CACHE_MS = 1_000
 const COMMAND_TIMEOUT_MS = 4_000
 
@@ -449,7 +449,7 @@ export function apply(ctx) {
           .catch(() => sendJson(res, 500, { ok: false, error: 'internal error' }))
       },
     }),
-    'battery-badge: status route',
+    'device-badge: status route',
   )
 }
 
