@@ -1,5 +1,5 @@
 /**
- * dsh-battery-badge — client half.
+ * dsh-device-badge — client half.
  *
  * Renders one compact badge INSIDE the account row at the bottom of the sidebar
  * (same line as the signed-in user), showing:
@@ -7,7 +7,7 @@
  *     MacBook Air M1   58%   [battery glyph]
  *
  * Order is model → percentage → icon, with no progress bar, per the requested
- * design. Polls the host route GET /api/battery-badge/status (loopback only,
+ * design. Polls the host route GET /api/device-badge/status (loopback only,
  * session-authenticated) and never talks to the network.
  *
  * The badge is registered into `settings.launcher.notifications` — the only
@@ -18,13 +18,13 @@
  * class name.
  */
 window.__ModuleLoader__.load({
-  id: 'dsh-battery-badge',
+  id: 'dsh-device-badge',
   factory(require) {
     const React = require('react')
     const h = React.createElement
     const { useEffect, useState, useRef } = React
 
-    const ENDPOINT = '/api/battery-badge/status'
+    const ENDPOINT = '/api/device-badge/status'
     const POLL_MS = 20_000
     const SLOT = 'settings.launcher.notifications'
 
@@ -636,7 +636,7 @@ window.__ModuleLoader__.load({
       return level
     }
 
-    function BatteryBadge(props) {
+    function DeviceBadge(props) {
       const { state, failed } = useBatteryStatus()
       const text = props?.t ?? TEXT.zh
 
@@ -717,7 +717,7 @@ window.__ModuleLoader__.load({
       return h(
         'div',
         {
-          'data-battery-badge': '',
+          'data-device-badge': '',
           ref: rootRef,
           title: tooltip,
           'aria-label': tooltip,
@@ -815,9 +815,9 @@ window.__ModuleLoader__.load({
     }
 
     /** Move this slot's wrapper (normally above the row) back onto the row. */
-    const STYLE_ID = 'dsh-battery-badge-style'
+    const STYLE_ID = 'dsh-device-badge-style'
     const CSS = `
-:has(> [data-slot="${SLOT}"] > [data-battery-badge]) {
+:has(> [data-slot="${SLOT}"] > [data-device-badge]) {
   top: 0 !important;
   bottom: 0 !important;
   pointer-events: none !important;
@@ -826,8 +826,8 @@ window.__ModuleLoader__.load({
 
 /* Collapsed rail has no room for the text badge — hide it rather than let it
    overlap the avatar button. */
-[class*="rail"] :has(> [data-slot="${SLOT}"] > [data-battery-badge]),
-[class*="collapsed"] :has(> [data-slot="${SLOT}"] > [data-battery-badge]) {
+[class*="rail"] :has(> [data-slot="${SLOT}"] > [data-device-badge]),
+[class*="collapsed"] :has(> [data-slot="${SLOT}"] > [data-device-badge]) {
   display: none !important;
 }
 
@@ -836,7 +836,7 @@ window.__ModuleLoader__.load({
    badge used to slide left and collide with the nickname. Hiding it there is
    the honest choice: the phone UI has its own status area anyway. */
 @media (max-width: 380px) {
-  :has(> [data-slot="${SLOT}"] > [data-battery-badge]) {
+  :has(> [data-slot="${SLOT}"] > [data-device-badge]) {
     display: none !important;
   }
 }
@@ -855,16 +855,16 @@ window.__ModuleLoader__.load({
           return () => {
             if (style.parentNode !== null) style.remove()
           }
-        }, 'battery-badge: row placement styles')
+        }, 'device-badge: row placement styles')
 
         ctx.slots.inject(SLOT, () =>
           ctx.slots.register(
             {
               name: SLOT,
-              id: 'battery-badge',
+              id: 'device-badge',
               order: 50,
             },
-            (props) => h(BatteryBadge, { ...props, t: text }),
+            (props) => h(DeviceBadge, { ...props, t: text }),
           ),
         )
       },
