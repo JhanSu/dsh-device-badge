@@ -1,5 +1,5 @@
 {
-  "name": "dsh-battery-badge",
+  "name": "dsh-device-badge",
   "version": "1.0.0",
   "private": false,
   "type": "module",
@@ -45,7 +45,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/JhanSu/dsh-battery-badge.git"
+    "url": "git+https://github.com/JhanSu/dsh-device-badge.git"
   },
-  "homepage": "https://github.com/JhanSu/dsh-battery-badge"
+  "homepage": "https://github.com/JhanSu/dsh-device-badge"
 }
