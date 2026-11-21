@@ -1,5 +1,5 @@
-# dsh-battery-badge bundle patch: inserts one host row that serves the
+# dsh-device-badge bundle patch: inserts one host row that serves the
 # local battery snapshot over a loopback route the sidebar client polls.
 - insert:
-    - id: battery-badge
-      name: "dsh-battery-badge"
+    - id: device-badge
+      name: "dsh-device-badge"
