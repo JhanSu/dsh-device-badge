@@ -1,9 +1,9 @@
 {
   "name": "dsh-device-badge",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": false,
   "type": "module",
-  "description": "Device badge for the DSH sidebar: on laptops shows the model, charge level and battery state; on desktops and NAS boxes shows a matching device icon instead.",
+  "description": "Shows the machine DSH runs on in the sidebar account row: laptops get the model, battery percentage and a macOS-style charging glyph; iMac, Mac mini, Windows desktops and NAS boxes get their own outlined device icon.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -15,7 +15,7 @@
     "client.js",
     "cordis.patch.yml",
     "locale/*.json",
-    "docs",
+    "docs/DETAIL.md",
     "icon.svg"
   ],
   "engines": {
@@ -37,9 +37,10 @@
   "keywords": [
     "dsh",
     "dsh-plugin",
-    "battery",
-    "sidebar",
     "device",
+    "badge",
+    "sidebar",
+    "battery",
     "macos",
     "nas"
   ],
