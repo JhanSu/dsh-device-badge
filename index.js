@@ -208,6 +208,32 @@ async function readMacModel() {
   }
 }
 
+/**
+ * macOS marketing version and build, e.g. "macOS 15.7.4" + "24G517".
+ *
+ * `sw_vers` is the cheapest source (7 ms measured) and needs no privileges, so
+ * it runs alongside the battery read rather than being a separate round trip.
+ */
+async function readMacOsVersion() {
+  try {
+    const { stdout } = await execFileAsync('/usr/bin/sw_vers', [], {
+      timeout: COMMAND_TIMEOUT_MS,
+    })
+    const lines = String(stdout)
+    const pick = (key) => {
+      const m = new RegExp(`^${key}:\\s*(.+)$`, 'm').exec(lines)
+      return m === null ? null : m[1].trim()
+    }
+    return {
+      name: pick('ProductName'),
+      version: pick('ProductVersion'),
+      build: pick('BuildVersion'),
+    }
+  } catch {
+    return { name: null, version: null, build: null }
+  }
+}
+
 async function readMacBattery() {
   try {
     const { stdout } = await execFileAsync('/usr/bin/pmset', ['-g', 'batt'], {
@@ -280,13 +306,46 @@ async function readWindowsInfo() {
       { timeout: COMMAND_TIMEOUT_MS },
     ).then((r) => String(r.stdout).trim())
 
+  // What to call this PC.
+  //
+  // `Win32_ComputerSystem.Model` is useless on a self-built desktop: it holds
+  // the *motherboard* string (e.g. "JGINYUE"), not a machine name — there is no
+  // brand to report for a hand-assembled box. The computer name the owner chose
+  // is far more identifying, so Windows always reports that as the label.
+  //
+  // Windows version is captured alongside it for the tooltip: "Windows 11 专业版
+  // 24H2 (26100)" tells you which box you're on better than "Windows" does.
   let model = null
+  let osName = null
+  let osVersion = null
+  let osBuild = null
   let battery = null
   try {
-    model =
-      (await ps('(Get-CimInstance Win32_ComputerSystem).Model')) ||
-      (await ps('(Get-CimInstance Win32_ComputerSystem).Manufacturer')) ||
-      null
+    model = (await ps('$env:COMPUTERNAME')) || null
+  } catch {
+    /* ignore */
+  }
+  try {
+    // Caption is localised ("Microsoft Windows 11 专业版"); DisplayVersion is
+    // the marketing version ("24H2"); CurrentBuild is the build number.
+    const raw = await ps(
+      'Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,BuildNumber | ConvertTo-Json -Compress',
+    )
+    if (raw) {
+      const json = JSON.parse(raw)
+      // ConvertTo-Json returns an object for one item, an array for several.
+      const parsed = Array.isArray(json) ? (json[0] ?? {}) : json
+      const caption = String(parsed.Caption ?? '')
+        .replace(/^Microsoft\s+/i, '')
+        .trim()
+      // Caption already carries the edition ("Windows 11 专业版"), so osName is
+      // the whole readable name and osVersion stays empty — putting the build
+      // number there would render "Windows 11 专业版 26100" without brackets.
+      // The build goes in osBuild, which the client wraps in parentheses.
+      osName = caption || null
+      osVersion = null
+      osBuild = String(parsed.BuildNumber ?? '').trim() || String(parsed.Version ?? '').trim() || null
+    }
   } catch {
     /* ignore */
   }
@@ -315,7 +374,7 @@ async function readWindowsInfo() {
   } catch {
     /* no battery */
   }
-  return { model, battery }
+  return { model, osName, osVersion, osBuild, battery }
 }
 
 async function snapshot({ fresh = false } = {}) {
@@ -327,16 +386,28 @@ async function snapshot({ fresh = false } = {}) {
   let modelLabel = null
   let battery = null
   let brand = null
+  let osName = null
+  let osVersion = null
 
   if (platform === 'darwin') {
-    const [id, batt] = await Promise.all([readMacModel(), readMacBattery()])
+    const [id, batt, os] = await Promise.all([
+      readMacModel(),
+      readMacBattery(),
+      readMacOsVersion(),
+    ])
     modelId = id
     battery = batt
     modelLabel = id === null ? null : MODEL_NAMES[id] ?? null
+    osName = os.name
+    osVersion = os.version
+    osBuild = os.build
   } else if (platform === 'win32') {
     const info = await readWindowsInfo()
     modelLabel = info.model
     modelId = info.model
+    osName = info.osName
+    osVersion = info.osVersion
+    osBuild = info.osBuild
     battery = info.battery
   } else {
     const [vendor, product, osRelease, batt] = await Promise.all([
@@ -349,6 +420,18 @@ async function snapshot({ fresh = false } = {}) {
     brand = detectNasBrand(vendor, product, osRelease)
     modelLabel = product ?? vendor ?? null
     modelId = modelLabel
+    // /etc/os-release gives PRETTY_NAME ("Ubuntu 24.04.1 LTS") and
+    // VERSION_ID for the tooltip, same fields the other platforms fill.
+    const osVars = Object.fromEntries(
+      String(osRelease)
+        .split('\n')
+        .map((line) => line.split('='))
+        .filter((pair) => pair.length === 2)
+        .map(([k, v]) => [k.trim(), v.trim().replace(/^"|"$/g, '')]),
+    )
+    osName = osVars.PRETTY_NAME ?? osVars.NAME ?? null
+    osVersion = osVars.VERSION_ID ?? null
+    osBuild = osVars.BUILD_ID ?? null
   }
 
   const kind = deviceKindFor(modelId, platform, battery !== null)
@@ -367,6 +450,10 @@ async function snapshot({ fresh = false } = {}) {
     modelLabel,
     modelShort: shortModelLabel(modelId, modelLabel),
     modelBrief: briefModelLabel(modelId, modelLabel, kind, brand),
+    // OS name + version/build, shown in the tooltip. Set on every platform.
+    osName,
+    osVersion,
+    osBuild,
     hostname,
     ...(battery === null
       ? {}
