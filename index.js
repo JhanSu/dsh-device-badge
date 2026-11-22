@@ -388,6 +388,7 @@ async function snapshot({ fresh = false } = {}) {
   let brand = null
   let osName = null
   let osVersion = null
+  let osBuild = null
 
   if (platform === 'darwin') {
     const [id, batt, os] = await Promise.all([
