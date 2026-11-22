@@ -700,8 +700,23 @@ window.__ModuleLoader__.load({
       const rawId = state?.modelId ?? null
       const showRawId =
         rawId !== null && friendlyName !== null && rawId !== friendlyName
+      // OS line: "macOS 15.7.4 (24G517)" / "Windows 11 专业版 (26100)".
+      // macOS puts the build in osBuild; Windows reports it as osVersion with
+      // no separate build, so the two collapse into one readable field.
+      const osVersionText = state?.osVersion ?? null
+      const osBuildText = state?.osBuild ?? null
+      const osLine = (() => {
+        if (!state?.osName && !osVersionText) return null
+        const head = [state?.osName, osVersionText].filter(Boolean).join(' ')
+        // Only append parens when the build is a genuinely separate value.
+        const tail =
+          osBuildText && osBuildText !== osVersionText ? `(${osBuildText})` : null
+        return [head, tail].filter(Boolean).join(' ')
+      })()
+
       const tooltip = [
         friendlyName ?? text.unknown,
+        osLine,
         isLaptop && percent !== null ? `${percent}%` : null,
         isLaptop ? status : null,
         showRawId ? rawId : null,
