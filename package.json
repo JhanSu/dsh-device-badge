@@ -1,6 +1,6 @@
 {
   "name": "dsh-device-badge",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": false,
   "type": "module",
   "description": "Shows the machine DSH runs on in the sidebar account row: laptops get the model, battery percentage and a macOS-style charging glyph; iMac, Mac mini, Windows desktops and NAS boxes get their own outlined device icon.",
