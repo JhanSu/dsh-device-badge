@@ -299,12 +299,44 @@ async function readLinuxBattery() {
 }
 
 async function readWindowsInfo() {
+  // Two layers of defence against Windows text encoding:
+  //
+  // 1. Every call runs a preamble that forces PowerShell's output encoding to
+  //    UTF-8. PowerShell otherwise writes stdout in the *console* code page —
+  //    936 (GBK) on a Simplified-Chinese Windows — while Node decodes stdout as
+  //    UTF-8, so "Windows 11 专业版" arrives as mojibake.
+  // 2. Anything carrying user-visible localised text goes through psJson(),
+  //    which returns base64-encoded JSON. Base64 is pure ASCII, so no code page
+  //    can touch it regardless of how PowerShell is configured.
+  const UTF8_PREAMBLE =
+    '$OutputEncoding = [System.Text.Encoding]::UTF8; ' +
+    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; '
+
   const ps = (script) =>
     execFileAsync(
       'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-Command', script],
-      { timeout: COMMAND_TIMEOUT_MS },
+      ['-NoProfile', '-NonInteractive', '-Command', UTF8_PREAMBLE + script],
+      { timeout: COMMAND_TIMEOUT_MS, encoding: 'utf8' },
     ).then((r) => String(r.stdout).trim())
+
+  /**
+   * Run a PowerShell expression and return the decoded JSON it produces.
+   *
+   * The script is asked to emit `[Convert]::ToBase64String(...)` of the UTF-8
+   * bytes rather than the text itself. Base64 is pure ASCII, so nothing can be
+   * mangled by the console code page on the way out — this sidesteps the whole
+   * class of Windows encoding bugs instead of fighting it with chcp.
+   */
+  const psJson = async (expression) => {
+    const b64 = await ps(
+      `$json = ${expression} | ConvertTo-Json -Compress -Depth 4; ` +
+        `[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($json))`,
+    )
+    if (!b64) return null
+    const text = Buffer.from(b64, 'base64').toString('utf8')
+    return JSON.parse(text)
+  }
+
 
   // What to call this PC.
   //
@@ -321,30 +353,36 @@ async function readWindowsInfo() {
   let osBuild = null
   let battery = null
   try {
-    model = (await ps('$env:COMPUTERNAME')) || null
+    // Computer names may be Chinese ("张伟的台式机") on a localized Windows, so
+    // they travel through psJson too — a plain `ps` call would mangle them the
+    // same way the edition name was mangled.
+    const name = await psJson('$env:COMPUTERNAME')
+    model = typeof name === 'string' ? name.trim() || null : null
   } catch {
     /* ignore */
   }
   try {
-    // Caption is localised ("Microsoft Windows 11 专业版"); DisplayVersion is
-    // the marketing version ("24H2"); CurrentBuild is the build number.
-    const raw = await ps(
-      'Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,BuildNumber | ConvertTo-Json -Compress',
+    // Caption is localised ("Microsoft Windows 11 专业版"), which is exactly the
+    // string the console code page used to mangle — psJson carries it as
+    // base64 so the Chinese edition name survives the trip.
+    const parsed = await psJson(
+      'Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,BuildNumber',
     )
-    if (raw) {
-      const json = JSON.parse(raw)
-      // ConvertTo-Json returns an object for one item, an array for several.
-      const parsed = Array.isArray(json) ? (json[0] ?? {}) : json
-      const caption = String(parsed.Caption ?? '')
+    if (parsed) {
+      // ConvertTo-Json returns a single object for one row; be tolerant anyway.
+      const row = Array.isArray(parsed) ? (parsed[0] ?? {}) : parsed
+      const caption = String(row.Caption ?? '')
         .replace(/^Microsoft\s+/i, '')
         .trim()
-      // Caption already carries the edition ("Windows 11 专业版"), so osName is
-      // the whole readable name and osVersion stays empty — putting the build
-      // number there would render "Windows 11 专业版 26100" without brackets.
-      // The build goes in osBuild, which the client wraps in parentheses.
+      // Caption already carries the edition, so osName is the whole readable
+      // name and osVersion stays empty — the build goes in osBuild, which the
+      // client wraps in parentheses.
       osName = caption || null
       osVersion = null
-      osBuild = String(parsed.BuildNumber ?? '').trim() || String(parsed.Version ?? '').trim() || null
+      osBuild =
+        String(row.BuildNumber ?? '').trim() ||
+        String(row.Version ?? '').trim() ||
+        null
     }
   } catch {
     /* ignore */
